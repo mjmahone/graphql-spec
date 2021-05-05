@@ -82,11 +82,11 @@ However, even to enable this client-compile-time operation transformation, Relay
 
 Additionally, the `@argumentDefinitions` directive gets very verbose and unsafe, using strings to represent variable type declarations.
 
-Relay has supported `@arguments` in its current form since [v2.0](https://github.com/facebook/relay/releases/tag/v2.0.0), released in January 2019. There's now a large body of evidence that allowing fragments to define arguments that can be passed into fragment spreads is a signficant usability improvement, and valuable to the wider GraphQL community. However, if we are to introduce this notion more broadly, we should make sure the ergonomics of it conform to users' expectations.
+Relay has supported `@arguments` in its current form since [v2.0](https://github.com/facebook/relay/releases/tag/v2.0.0), released in January 2019. There's now a large body of evidence that allowing fragments to define arguments that can be passed into fragment spreads is a significant usability improvement, and valuable to the wider GraphQL community. However, if we are to introduce this notion more broadly, we should make sure the ergonomics of it conform to users' expectations.
 
 # Proposal: Introduce Fragment Argument Definitions and Fragment Spread Arguments to client-only GraphQL
 
-Relay's `@arguments`/`@argumentDefinitions` concepts provide value, and can be applied against GraphQL written for existing GraphQL servers so long as the pre-server compiler transforms the concept away. However, client-focused tooling, like Prettier and GraphiQL, should be able to recognize and work with these new concepts.
+Relay's `@arguments`/`@argumentDefinitions` concepts provide value, and can be applied against GraphQL written for existing GraphQL servers so long as there is a pre-server compiler which transforms the concept away. However, client-focused tooling, like Prettier and GraphiQL, should also be able to parse and work with these new concepts.
 
 ## New Fragment Variable Definition syntax
 
@@ -118,7 +118,7 @@ fragment TopFriendsUserProfile on User {
 
 ## New Validation Rule: Fragment Argument Definitions Used in Fragment
 
-The whole point of fragment defined arguments is to make fragments more composable. Therefore, fragments should only be defining variables that are explicitly used under that fragment.
+The main use case for fragment defined arguments is to make fragments more composable. Therefore, fragments should only be defining variables that are explicitly used under that fragment.
 
 Under this rule,
 ```
@@ -162,8 +162,8 @@ It's clearly more composable if, when changing a child fragment, you don't need 
 
 Make the [Required Arguments](https://spec.graphql.org/draft/#sec-Required-Arguments) validation's first two bullets:
 
-- For each Field, Fragment Spread or Directive in the document.
-- Let *arguments* be the set of argument definitions of that Field, Fragment or Directive.
+- For each Field, **Fragment Spread** or Directive in the document.
+- Let *arguments* be the set of argument definitions of that Field, **Fragment** or Directive.
 
 With this rule, the below example is invalid, even if the argument `User.number(x:)` is nullable in the schema.
 ```
@@ -196,6 +196,8 @@ query {
 ```
 
 Note: today Relay's compiler handles this ambiguity. In an extreme simplification, this is done by producing two unique versions of `UserProfile`, where in `UserProfile_0` `$imageSize` is replaced with `100`, and in `UserProfile_1` `$imageSize` is replaced with `200`. However, there exist client implementations that are unable to have multiple applications of the same fragment within a single operation (the clients I work on cannot use Relay's trick).
+
+This validation rule may end up being more strict than required, but it would be easier to relax the rule than make it more strict later.
 
 # Implementation
 
