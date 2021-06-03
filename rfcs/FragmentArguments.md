@@ -84,9 +84,9 @@ Additionally, the `@argumentDefinitions` directive gets very verbose and unsafe,
 
 Relay has supported `@arguments` in its current form since [v2.0](https://github.com/facebook/relay/releases/tag/v2.0.0), released in January 2019. There's now a large body of evidence that allowing fragments to define arguments that can be passed into fragment spreads is a significant usability improvement, and valuable to the wider GraphQL community. However, if we are to introduce this notion more broadly, we should make sure the ergonomics of it conform to users' expectations.
 
-# Proposal: Introduce Fragment Argument Definitions and Fragment Spread Arguments to client-only GraphQL
+# Proposal: Introduce Fragment Argument Definitions, which allow using arguments on Fragment Spreads
 
-Relay's `@arguments`/`@argumentDefinitions` concepts provide value, and can be applied against GraphQL written for existing GraphQL servers so long as there is a pre-server compiler which transforms the concept away. However, client-focused tooling, like Prettier and GraphiQL, should also be able to parse and work with these new concepts.
+Relay's `@arguments`/`@argumentDefinitions` concepts provide value, and can be applied against GraphQL written for existing GraphQL servers so long as there is a pre-server compiler which transforms the concept away.
 
 ## New Fragment Variable Definition syntax
 
@@ -201,7 +201,6 @@ This validation rule may end up being more strict than required, but it would be
 
 # Implementation
 
-Any client that implements this RFC would have a pre-server compilation step, which transforms all fragment defined variable usages to:
-- The passed-in value from a parent fragment spread
-- Or if no value is passed in, the default value for the fragment argument definition,
-- Or if no default value is defined and no value is passed in, null.
+This proposal can be implemented as a compilation step that compiles the user-written GraphQL into a document without fragment arguments. This can eb done in a variety of ways, such as by doing find-variable-replace-with-argument-value or by adding variables on the operation with the argument value set as the default  value.
+
+Alternatively, implementations that want to support fragment arguments directly, a naive approach is, when encountering a fragment spread for a fragment with argument definitions, prior to collection that fragment's fields, replace the argument variables with the passed in argument value or default values.
