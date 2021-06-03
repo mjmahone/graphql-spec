@@ -201,6 +201,6 @@ This validation rule may end up being more strict than required, but it would be
 
 # Implementation
 
-This proposal can be implemented as a compilation step that compiles the user-written GraphQL into a document without fragment arguments. This can eb done in a variety of ways, such as by doing find-variable-replace-with-argument-value or by adding variables on the operation with the argument value set as the default  value.
+This proposal can be implemented as a compilation step that compiles the user-written GraphQL into a document without fragment arguments. This can be done in a variety of ways, such as by doing find-variable-replace-with-argument-value or by adding variables on the operation with the argument value set as the default  value.
 
-Alternatively, implementations that want to support fragment arguments directly, a naive approach is, when encountering a fragment spread for a fragment with argument definitions, prior to collection that fragment's fields, replace the argument variables with the passed in argument value or default values.
+Alternatively, implementations may want to support fragment arguments directly. For a naive naive approach, during collectFields, when encountering a fragment spread selection for a fragment with argument definitions, replace the argument variables with the passed in argument value or default values.
