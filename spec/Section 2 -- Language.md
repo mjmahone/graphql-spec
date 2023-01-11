@@ -518,8 +518,8 @@ which returns the result:
 
 FragmentSpread : ... FragmentName Arguments? Directives?
 
-FragmentDefinition : fragment FragmentName FragmentArgumentsDefinition?
-TypeCondition Directives? SelectionSet
+FragmentDefinition : fragment FragmentName VariablesDefinition? TypeCondition
+Directives? SelectionSet
 
 FragmentName : Name but not `on`
 
@@ -1212,21 +1212,15 @@ size `60`:
 Variables can be used within fragments. Operation-defined variables have global
 scope with a given operation, so a variable used within a fragment must either
 be declared in any top-level operation that transitively consumes that fragment,
-or by that same fragment as a fragment argument. If a variable is referenced in
-a fragment that does not define it as an argument and is included by an
-operation that does not define that variable, that operation is invalid (see
+or by that same fragment as a fragment variable definition. If a variable is
+referenced in a fragment is included by an operation where neither the fragment
+nor the operaiton defines that variable, that operation is invalid (see
 [All Variable Uses Defined](#sec-All-Variable-Uses-Defined)).
 
-## Fragment Arguments
+## Fragment Variable Definitions
 
-FragmentArgumentsDefinition : ( FragmentArgumentDefinition+ )
-
-FragmentArgumentDefinition : Description? Variable : Type DefaultValue?
-Directives[Const]?
-
-Fragments may define locally scoped arguments, which can be used in locations
-that accept variables. This allows fragments to be reused while enabling the
-caller to specify the fragment's behavior.
+Fragments may define locally scoped variables. This allows fragments to be
+reused while enabling the caller to specify the fragment's behavior.
 
 For example, the profile picture may need to be a different size depending on
 the parent context:
@@ -1251,8 +1245,8 @@ fragment dynamicProfilePic($size: Int! = 50) on User {
 In this case the `user` will have a larger `profilePic` than those found in the
 list of `friends`.
 
-A fragment argument is scoped to the fragment that defines it. Fragment
-arguments are allowed to shadow operation variables.
+A fragment-defined variable is scoped to the fragment that defines it.
+Fragment-defined variables are allowed to shadow operation-defined variables.
 
 ```graphql example
 query withShadowedVariables($size: Int) {

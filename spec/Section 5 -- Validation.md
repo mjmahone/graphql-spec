@@ -419,7 +419,8 @@ fragment directFieldSelectionOnUnion on CatOrDog {
 FieldsInSetCanMerge(set):
 
 - Let {visitedSelections} be the selections in {set} including visiting
-  fragments and inline fragments an applying any supplied fragment arguments.
+  fragments and inline fragments and applying any supplied fragment spread
+  arguments.
 - Let {spreadsForName} be the set of fragment spreads with a given name in
   {visitedSelections}.
 - Given each pair of members {spreadA} and {spreadB} in {spreadsForName}:
@@ -576,7 +577,7 @@ fragment conflictingDifferingResponses on Pet {
 }
 ```
 
-Fragment arguments can also cause fields to fail to merge.
+Fragment spread arguments can also cause fields to fail to merge.
 
 While the following is valid:
 
@@ -599,11 +600,11 @@ fragment safeFragmentArguments on Dog {
 ```
 
 it is only valid because `safeFragmentArguments` uses
-`potentiallyConflictingArguments` with the same value for `commandOne` and
-`commandTwo`. Therefore `commandFragment` resolves `doesKnowCommand`'s
-`dogCommand:` arg to `SIT` in both cases.
+`potentiallyConflictingArguments` with the same value for the fragment-defined
+variables `commandOne` and `commandTwo`. Therefore `commandFragment` resolves
+`doesKnowCommand`'s `dogCommand` argument value to `SIT` in both cases.
 
-However, by changing the argument values:
+However, by changing the fragment spread argument values:
 
 ```graphql counter-example
 fragment conflictingFragmentArguments on Dog {
@@ -706,14 +707,16 @@ validation rules apply in each case.
 
 - For each {argument} in the document:
   - Let {argumentName} be the Name of {argument}.
-  - Let {argumentDefinition} be the argument definition provided by the parent
-    field, fragment definition or directive definition named {argumentName}.
+  - If the parent is a field or directive:
+  - Let {argumentDefinition} be the argument or variable definition named
+    {argumentName} provided by the parent field definition, directive definition
+    or fragment definition.
   - {argumentDefinition} must exist.
 
 **Explanatory Text**
 
-Every argument provided to a field or directive must be defined in the set of
-possible arguments of that field or directive.
+Every argument provided to a field or directive or fragment spread must be
+defined in the set of possible arguments of that field, directive or fragment.
 
 For example the following are valid:
 
@@ -744,7 +747,7 @@ fragment invalidArgName on Dog {
 }
 ```
 
-and this is also invalid as the argument `dogCommand` is not defined on fragment
+and this is also invalid as the variable `dogCommand` is not defined on fragment
 `withFragmentArg`.
 
 ```graphql counter-example
@@ -810,10 +813,10 @@ ambiguous and invalid.
 #### Required Arguments
 
 - For each Field, Fragment Spread or Directive in the document:
-  - Let {arguments} be the arguments provided by the Field, Fragment Spread or
-    Directive.
-  - Let {argumentDefinitions} be the set of argument definitions of that Field,
-    Fragment Spread or Directive.
+  - Let {arguments} be the arguments provided by the Field, Directive or
+    Fragment Spread.
+  - Let {argumentDefinitions} be the set of argument definitions of that Field
+    or Directive, or the variable definitions of that Fragment.
   - For each {argumentDefinition} in {argumentDefinitions}:
     - Let {type} be the expected type of {argumentDefinition}.
     - Let {defaultValue} be the default value of {argumentDefinition}.
@@ -1592,8 +1595,8 @@ query ($foo: Boolean = true, $bar: Boolean = false) {
 
 **Formal Specification**
 
-- For every {operation} in the document:
-  - For every {variable} defined on {operation}:
+- For every {operation} and {fragment} in the document:
+  - For every {variable} defined on that {operation} or {fragment}:
     - Let {variableName} be the name of {variable}.
     - Let {variables} be the set of all variables named {variableName} on
       {operation}.
@@ -1601,9 +1604,9 @@ query ($foo: Boolean = true, $bar: Boolean = false) {
 
 **Explanatory Text**
 
-If any operation defines more than one variable with the same name, it is
-ambiguous and invalid. It is invalid even if the type of the duplicate variable
-is the same.
+If any operation or fragment defines more than one variable with the same name,
+it is ambiguous and invalid. It is invalid even if the type of the duplicate
+variable is the same.
 
 ```graphql counter-example
 query houseTrainedQuery($atOtherHomes: Boolean, $atOtherHomes: Boolean) {
@@ -1632,12 +1635,35 @@ fragment HouseTrainedFragment on Query {
 }
 ```
 
+Likewise, it is valid for both an operation and a fragment to define a variable
+with the same name:
+
+```graphql example
+query C($atOtherHomes: Boolean) {
+  ...HouseTrainedFragment
+  aDog: dog {
+    ...HouseTrainedDog
+  }
+}
+
+fragment HouseTrainedDog($atOtherHomes: Boolean) on Dog {
+  isHouseTrained(atOtherHomes: $atOtherHomes)
+}
+```
+
+Fragment-defined variables are scoped locally to the fragment that defines them,
+and override any operation-defined variable values, so there is never ambiguity
+about which value to use. In this case, the value of the argument `atOtherHomes`
+within `HouseTrainedFragment` will be the operation-set value, and within
+`HouseTrainedDog` will resolve to `null`, as the argument is not set by the
+fragment spread in the query `C`.
+
 ### Variables Are Input Types
 
 **Formal Specification**
 
-- For every {operation} in a {document}:
-  - For every {variable} on each {operation}:
+- For every {operation} and {fragment} in a {document}:
+  - For every {variable} defined on each {operation} or {fragment}:
     - Let {variableType} be the type of {variable}.
     - {IsInputType(variableType)} must be {true}.
 
@@ -1705,13 +1731,14 @@ query takesCatOrDog($catOrDog: CatOrDog) {
     transitively.
   - For each {fragment} in {fragments}:
     - For each {variableUsage} in scope of {fragment}, variable must be in
-      {operation}'s variable list.
+      {fragment}'s or {operation}'s variable list.
 
 **Explanatory Text**
 
-Variables are scoped on a per-operation basis. That means that any variable used
-within the context of an operation must be defined at the top level of that
-operation
+Operation-defined Variables are scoped on a per-operation basis, while
+Fragment-defined Variables are scoped locally to the fragment. That means that
+any variable used within the context of an operation must either be defined at
+the top level of that operation or on the fragment that uses that variable.
 
 For example:
 
@@ -1738,9 +1765,10 @@ query variableIsNotDefined {
 ${atOtherHomes} is not defined by the operation.
 
 Fragments complicate this rule. Any fragment transitively included by an
-operation has access to the variables defined by that operation. Fragments can
-appear within multiple operations and therefore variable usages must correspond
-to variable definitions in all of those operations.
+operation has access to the variables defined by that operation and defined on
+the fragment. Fragments can appear within multiple operations and therefore
+variable usages not defined on the fragment must correspond to variable
+definitions in all of those operations.
 
 For example the following is valid:
 
@@ -1837,7 +1865,7 @@ This is because {houseTrainedQueryTwoNotDefined} does not define a variable
 ${atOtherHomes} but that variable is used by {isHouseTrainedFragment} which is
 included in that operation.
 
-### All Variables Used
+### All Operation Variables Used
 
 **Formal Specification**
 
@@ -1945,20 +1973,21 @@ fragment isHouseTrainedFragment on Dog {
 This document is not valid because {queryWithExtraVar} defines an extraneous
 variable.
 
-### All Fragment Arguments Used
+### All Fragment Variables Used
 
 **Formal Specification**
 
 - For every {fragment} in the document:
-  - Let {arguments} be the arguments defined by that {fragment}.
-  - Each {argument} in {arguments} must be used at least once in the fragment's
+  - Let {variables} be the variables defined by that {fragment}.
+  - Each {variable} in {variables} must be used at least once in the fragment's
     scope.
 
 **Explanatory Text**
 
-All arguments defined by a fragment must be used in that same fragment. Because
-fragment arguments are scoped to the fragment they are defined on, if the
-fragment does not use the argument, then the argument is superfluous.
+All variables defined by a fragment must be used in that same fragment. Because
+fragment-defined variables are scoped to the fragment they are defined on, if
+the fragment does not use the variable, then the variable definition is
+superfluous.
 
 For example, the following is invalid:
 
@@ -1974,10 +2003,10 @@ fragment fragmentArgUnused($atOtherHomes: Boolean) on Dog {
 }
 ```
 
-This document is invalid because even though `fragmentArgUnused` is spread with
-the argument `atOtherHomes`, and even though `$atOtherHomes` is defined as an
-operation variable, there is never a variable `$atOtherHomes` used within the
-scope of `fragmentArgUnused`.
+This document is invalid: even though `fragmentArgUnused` is spread with the
+argument `atOtherHomes` and `$atOtherHomes` is defined as an operation variable,
+there is never a variable `$atOtherHomes` used within the scope of
+`fragmentArgUnused`.
 
 ### All Variable Usages Are Allowed
 
@@ -1987,9 +2016,9 @@ scope of `fragmentArgUnused`.
   - Let {variableUsages} be all usages transitively included in the {operation}.
   - For each {variableUsage} in {variableUsages}:
     - Let {variableName} be the name of {variableUsage}.
-    - If the usage is within a {fragment} that defines an argument of
-      {variableName}:
-      - Let {variableDefinition} be the {ArgumentDefinition} named
+    - If the usage is within a {fragment} that defines a {variableDefinition}
+      for {variableName}:
+      - Let {variableDefinition} be the {VariableDefinition} named
         {variableName} defined within {fragment}.
     - Otherwise, let {variableDefinition} be the {VariableDefinition} named
       {variableName} defined within {operation}.
