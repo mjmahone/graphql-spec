@@ -1596,10 +1596,11 @@ query ($foo: Boolean = true, $bar: Boolean = false) {
 **Formal Specification**
 
 - For every {operation} and {fragment} in the document:
-  - For every {variable} defined on that {operation} or {fragment}:
+  - Let {operationOrFragment} be that {operation} or {fragment}.
+  - For every {variable} defined on {operationOrFragment}:
     - Let {variableName} be the name of {variable}.
     - Let {variables} be the set of all variables named {variableName} on
-      {operation}.
+      {operationOrFragment}.
     - {variables} must be a set of one.
 
 **Explanatory Text**
@@ -1663,7 +1664,8 @@ fragment spread in the query `C`.
 **Formal Specification**
 
 - For every {operation} and {fragment} in a {document}:
-  - For every {variable} defined on each {operation} or {fragment}:
+  - Let {operationOrFragment} be that {operation} or {fragment}.
+  - For every {variable} defined on {operationOrFragment}:
     - Let {variableType} be the type of {variable}.
     - {IsInputType(variableType)} must be {true}.
 

@@ -332,11 +332,10 @@ First, the selection set is turned into a grouped field set; then, each
 represented field in the grouped field set produces an entry into a response
 map.
 
-ExecuteSelectionSet(selectionSet, objectType, objectValue, variableValues,
-argumentValues):
+ExecuteSelectionSet(selectionSet, objectType, objectValue, variableValues):
 
 - Let {groupedFieldSet} be the result of {CollectFields(objectType,
-  selectionSet, variableValues, argumentValues)}.
+  selectionSet, variableValues)}.
 - Initialize {resultMap} to an empty ordered map.
 - For each {groupedFieldSet} as {responseKey} and {fields}:
   - Let {fieldName} be the name of the first entry in {fields}. Note: This value
@@ -345,7 +344,7 @@ argumentValues):
     {objectType}.
   - If {fieldType} is defined:
     - Let {responseValue} be {ExecuteField(objectType, objectValue, fieldType,
-      fields, variableValues, argumentValues)}.
+      fields, variableValues)}.
     - Set {responseValue} as the value for {responseKey} in {resultMap}.
 - Return {resultMap}.
 
@@ -491,7 +490,7 @@ The depth-first-search order of the field groups produced by {CollectFields()}
 is maintained through execution, ensuring that fields appear in the executed
 response in a stable and predictable order.
 
-CollectFields(objectType, selectionSet, variableValues, argumentValues,
+CollectFields(objectType, selectionSet, variableValues,
 visitedFragments):
 
 - If {visitedFragments} is not provided, initialize it to the empty set.
@@ -519,20 +518,18 @@ visitedFragments):
       {fragmentSpreadName}.
     - If no such {fragment} exists, continue with the next {selection} in
       {selectionSet}.
-    - Let {spreadArgumentValues} be the result of calling
-      {ArgumentsFromSpread(selection, fragment, variableValues, argumentValues)}
-    - Let {fragmentSpreadKey} be a unique key of {fragmentSpreadName} and
-      {spreadArgumentValues}.
+    - Let {arguments} be the set of arguments on {selection}.
+    - Let {fragmentSpreadKey} be a unique key of {fragmentSpreadName} and {arguments}.
     - If {fragmentSpreadKey} is in {visitedFragments}, continue with the next
       {selection} in {selectionSet}.
     - Add {fragmentSpreadKey} to {visitedFragments}.
     - Let {fragmentType} be the type condition on {fragment}.
     - If {DoesFragmentTypeApply(objectType, fragmentType)} is false, continue
       with the next {selection} in {selectionSet}.
-    - Let {fragmentSelectionSet} be the top-level selection set of {fragment}.
+    - Let {fragmentWithArgumentSubstitutions} be the result of calling {SubstituteFragmentArguments(fragment, arguments)}.
+    - Let {fragmentSelectionSet} be the top-level selection set of {fragmentWithArgumentSubstitutions}.
     - Let {fragmentGroupedFieldSet} be the result of calling
-      {CollectFields(objectType, fragmentSelectionSet, variableValues,
-      spreadArgumentValues, visitedFragments)}.
+      {CollectFields(objectType, fragmentSelectionSet, variableValues, visitedFragments)}.
     - For each {fragmentGroup} in {fragmentGroupedFieldSet}:
       - Let {responseKey} be the response key shared by all fields in
         {fragmentGroup}.
@@ -546,8 +543,7 @@ visitedFragments):
       {selectionSet}.
     - Let {fragmentSelectionSet} be the top-level selection set of {selection}.
     - Let {fragmentGroupedFieldSet} be the result of calling
-      {CollectFields(objectType, fragmentSelectionSet, variableValues,
-      argumentValues, visitedFragments)}.
+      {CollectFields(objectType, fragmentSelectionSet, variableValues, visitedFragments)}.
     - For each {fragmentGroup} in {fragmentGroupedFieldSet}:
       - Let {responseKey} be the response key shared by all fields in
         {fragmentGroup}.
@@ -555,14 +551,6 @@ visitedFragments):
         {responseKey}; if no such list exists, create it as an empty list.
       - Append all items in {fragmentGroup} to {groupForResponseKey}.
 - Return {groupedFields}.
-
-ArgumentsFromSpread(fragmentSpread, fragment, variableValues,
-parentArgumentValues):
-
-- Let {argumentDefinitions} be the arguments defined on {fragment}
-- Let {spreadArguments} be the arguments set on {fragmentSpread}
-- Return the result of {CoerceArgumentValues(argumentDefinitions,
-  spreadArguments, variableValues, parentArgumentValues)}
 
 DoesFragmentTypeApply(objectType, fragmentType):
 
@@ -576,8 +564,29 @@ DoesFragmentTypeApply(objectType, fragmentType):
   - if {objectType} is a possible type of {fragmentType}, return {true}
     otherwise return {false}.
 
+SubstituteFragmentArguments(fragment, arguments):
+
+- Let {variablesToSubstitute} be initialized to an empty map.
+- For each {variableDefinition} in {fragment}:
+  - Let {variableName} be the name of {variableDefinition}.
+  - If {variableName} is a key in {arguments}:
+    - Let {argumentValue} be the value of {variableName} in {arguments}.
+    - Add {argumentValue} to {variablesToSubstitute} at key {variableName}.
+  - Otherwise if {variableDefinition} has a default value {defaultValue}:
+    - Add {defaultValue} to {variablesToSubstitute} at key {variableName}.
+  - Otherwise:
+    - Set the key {variableName} in {variableToSubstitute} to a value indicating the variable is unset.
+- Let {substitutedFragment} be a copy of {fragment} where:
+  - For each {variable} in the selection set of {fragment}:
+    - Let {variableUsageName} be the name of {variable}.
+    - If {variableUsageName} is in {variablesToSubstitute}:
+      - Replace {variable} with the value of {variableUsageName} in {variablesToSubstitute}.
+- Return {substitutedFragment}.
+
 Note: The steps in {CollectFields()} evaluating the `@skip` and `@include`
 directives may be applied in either order since they apply commutatively.
+
+Note: The unset value used to replace unset fragment-defined arguments in {SubstituteFragmentArguments()} must not be a variable defined by any operation that includes the fragment. An example would be to use a variable with a reserved prefix, like `$__UNSET`, to replace all unset fragment-defined variables.
 
 ## Executing Fields
 
@@ -587,17 +596,16 @@ coerces any provided argument values, then resolves a value for the field, and
 finally completes that value either by recursively executing another selection
 set or coercing a scalar value.
 
-ExecuteField(objectType, objectValue, fieldType, fields, variableValues,
-fragmentArgumentValues):
+ExecuteField(objectType, objectValue, fieldType, fields, variableValues):
 
 - Let {field} be the first entry in {fields}.
 - Let {fieldName} be the field name of {field}.
 - Let {argumentValues} be the result of {CoerceFieldArgumentValues(objectType,
-  field, variableValues, fragmentArgumentValues)}
+  field, variableValues)}
 - Let {resolvedValue} be {ResolveFieldValue(objectType, objectValue, fieldName,
   argumentValues)}.
 - Return the result of {CompleteValue(fieldType, fields, resolvedValue,
-  variableValues, fragmentArgumentValues)}.
+  variableValues)}.
 
 ### Coercing Field Arguments
 
@@ -608,18 +616,16 @@ the type system to have a specific input type.
 At each argument position in an operation may be a literal {Value}, or a
 {Variable} to be provided at runtime.
 
-CoerceFieldArgumentValues(objectType, field, variableValues,
-fragmentArgumentValues):
+CoerceFieldArgumentValues(objectType, field, variableValues):
 
 - Let {argumentValues} be the argument values provided in {field}.
 - Let {fieldName} be the name of {field}.
 - Let {argumentDefinitions} be the arguments defined by {objectType} for the
   field named {fieldName}.
 - Return {CoerceArgumentValues(argumentDefinitions, argumentValues,
-  variableValues, fragmentArgumentValues)}
+  variableValues)}
 
-CoerceArgumentValues(argumentDefinitions, argumentValues, variableValues,
-fragmentArgumentValues):
+CoerceArgumentValues(argumentDefinitions, argumentValues, variableValues):
 
 - For each {argumentDefinition} in {argumentDefinitions}:
   - Let {argumentName} be the name of {argumentDefinition}.
@@ -631,15 +637,10 @@ fragmentArgumentValues):
     {argumentName}.
   - If {argumentValue} is a {Variable}:
     - Let {variableName} be the name of {argumentValue}.
-    - If {fragmentArgumentValues} provides a value for the name {variableName}:
-      - Let {hasValue} be {true}.
-      - Let {value} be the value provided in {fragmentArgumentValues} for the
-        name {variableName}.
-    - Otherwise if {variableValues} provides a value for the name
-      {variableName}:
-      - Let {hasValue} be {true}.
-      - Let {value} be the value provided in {variableValues} for the name
-        {variableName}.
+    - Let {hasValue} be {true} if {variableValues} provides a value for the name
+      {variableName}.
+    - Let {value} be the value provided in {variableValues} for the name
+      {variableName}.
   - Otherwise, let {value} be {argumentValue}.
   - If {hasValue} is not {true} and {defaultValue} exists (including {null}):
     - Add an entry to {coercedValues} named {argumentName} with the value
@@ -695,12 +696,12 @@ After resolving the value for a field, it is completed by ensuring it adheres to
 the expected return type. If the return type is another Object type, then the
 field execution process continues recursively.
 
-CompleteValue(fieldType, fields, result, variableValues, argumentValues):
+CompleteValue(fieldType, fields, result, variableValues):
 
 - If the {fieldType} is a Non-Null type:
   - Let {innerType} be the inner type of {fieldType}.
   - Let {completedResult} be the result of calling {CompleteValue(innerType,
-    fields, result, variableValues, argumentValues)}.
+    fields, result, variableValues)}.
   - If {completedResult} is {null}, raise a _field error_.
   - Return {completedResult}.
 - If {result} is {null} (or another internal value similar to {null} such as
@@ -709,8 +710,7 @@ CompleteValue(fieldType, fields, result, variableValues, argumentValues):
   - If {result} is not a collection of values, raise a _field error_.
   - Let {innerType} be the inner type of {fieldType}.
   - Return a list where each list item is the result of calling
-    {CompleteValue(innerType, fields, resultItem, variableValues,
-    argumentValues)}, where {resultItem} is each item in {result}.
+    {CompleteValue(innerType, fields, resultItem, variableValues)}, where {resultItem} is each item in {result}.
 - If {fieldType} is a Scalar or Enum type:
   - Return the result of {CoerceResult(fieldType, result)}.
 - If {fieldType} is an Object, Interface, or Union type:
@@ -720,7 +720,7 @@ CompleteValue(fieldType, fields, result, variableValues, argumentValues):
     - Let {objectType} be {ResolveAbstractType(fieldType, result)}.
   - Let {subSelectionSet} be the result of calling {MergeSelectionSets(fields)}.
   - Return the result of evaluating {ExecuteSelectionSet(subSelectionSet,
-    objectType, result, variableValues, argumentValues)} _normally_ (allowing
+    objectType, result, variableValues)} _normally_ (allowing
     for parallelization).
 
 **Coercing Results**
